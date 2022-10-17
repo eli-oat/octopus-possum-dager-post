@@ -1,0 +1,122 @@
+# Game! Dungeon crawling?
+
+## Utilities 
+
+By leveraging the inbuilt n:random we are able to write a word to get a random number from within a range. 
+
+~~~
+:n:ranged-random (lower,upper-random) over - n:inc n:random swap mod + ;
+~~~
+
+## Encounter
+
+A word to determine what sort of encounter a player will have at a given location. Currently each type of encounter is evenly waited, so, just as likely as any other -- in the future I'd like to weight more heavily to some than others. A naive approach to do this would be to duplicate certain kinds of encounter in the look up table. Encounters are generated on a per-turn basis and aren't currently linked to player position in anyway -- in the future I'd like to have certain types of encounter linked to certain positions.
+
+See http://retroforth.org/examples/magic-8th-ball.retro.html
+See http://forth.works/share/65ce183c240f15ae8ca9eb7cb749d1b4
+
+~~~
+:null-encounter 'null_encounter s:put nl ; 
+:romantic-encounter 'romantic_encounter s:put nl ; 
+:vendor-encounter 'vendor_encounter s:put nl ; 
+:aggressive-encounter 'aggressive_encounter s:put nl ; 
+:wildlife-encounter 'wildlife_encounter s:put nl ;
+:environmental-encounter 'enviromental_encounter s:put nl ;
+
+{ [ ] (empty,_fill_offset_zero)
+  &null-encounter
+  &romantic-encounter
+  &vendor-encounter
+  &aggressive-encounter
+  &wildlife-encounter
+  &environmental-encounter } 'encounters const
+
+:build-encounter
+    &encounters #1 #6 n:ranged-random a:fetch call ;
+~~~
+
+
+## Global state
+
+Bootstrapping some state before taking in any player input.
+
+~~~
+{ 'hp 'x 'y } [ 'Player.%s s:format var ] a:for-each
+{ 'turn } [ 'Global.%s s:format var ] a:for-each
+
+:state-init
+    #0 !Global.turn
+    #50 !Player.x
+    #50 !Player.y
+    #50 #100 n:ranged-random !Player.hp ;
+
+:state-display
+    @Global.turn
+    @Player.x
+    @Player.y
+    @Player.hp
+    'POWER:_%n\nPOS_Y:_%n\nPOS_X:_%n\n============\nTurn_Count:_%n\n s:format s:put ;
+~~~
+
+## Process player input
+
+Here I define a very basic word to process player input and to display game ui as well as some words that can be triggered by player input. The last word is the core ui, it displays some hint text about the game's controls.
+
+~~~
+:go-north
+    &Player.y v:inc build-encounter ;
+
+:go-south
+    &Player.y v:dec build-encounter ;
+
+:go-east
+    &Player.x v:inc build-encounter ;
+
+:go-west
+    &Player.x v:dec build-encounter ;
+
+:go-center
+    #50 !Player.x
+    #50 !Player.y
+    build-encounter ;
+
+:unknown-input
+    nl '_is_not_a_known_input s:append s:put nl ;
+
+:process-input
+    'w [ go-north ] s:case
+    's [ go-south ] s:case
+    'a [ go-west ] s:case
+    'd [ go-east ] s:case
+    'c [ go-center ] s:case
+    'q [ bye ] s:case
+    unknown-input ;
+
+:hint-display
+    nl state-display nl '(w)_-_north\n(s)_-_south\n(a)_-_west\n(d)_-_east\n============\n(q)_-_quit s:format s:put nl nl ;
+~~~
+
+## Game loop
+
+The core game loop, like most game loops, is a while loop that'll run forever as long as some value is TRUE. I never actually bother to set that value to FALSE. To quit, the player inputs "q" which triggers the in-built `bye` word to exit the loop and halt the process, returning to the host system.
+
+Of note here is the turn word -- this is triggered at the start of each loop, after collecting the player's input. Turn isn't much more than a wrapper around process-input, the trick it pulls is to lead with an s:get (akin to Lua's io.read) to read-in whatever is input to stdin by the player. Once input is read in a new "turn" starts (increasing the turn count in Global.turn) and then clearing the display. Clearing the display ensures that the display is only ever showing state for the currently active turn.
+
+pos-check limits the size of the game surface to 100 x by 100 y. 
+
+~~~
+:pos-check
+    @Player.x #100 gt? [ #0 !Player.x ] if
+    @Player.x #0 lt? [ #100 !Player.x ] if 
+    @Player.y #100 gt? [ #0 !Player.y ] if 
+    @Player.y #0 lt? [ #100 !Player.y ] if ;
+
+:turn
+    &Global.turn v:inc clear process-input pos-check hint-display ;
+
+:welcome-message
+    nl 'Welcome!_╰(˙ᗜ˙)੭━☆ﾟ.*･｡ﾟ s:put nl ;
+
+state-init welcome-message hint-display
+[ s:get turn TRUE ] while
+~~~

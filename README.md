@@ -1,2 +1,4 @@
 # octopus-possum-dager-post
-Game in retroforth
+
+A game in [retroforth](http://www.retroforth.org).
+
